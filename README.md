@@ -16,6 +16,12 @@ bash scripts/init.sh
 
 ---
 
+### Updates
+
+As of **March 3rd, 2026**, I patched the bug with GitHub Codespaces (hopefully) and issues with the port not auto forwarding should be resolved. Optimizations and overall bug fixes have been patched as well. After the setup for Revision is finished, it should automatically open a new tab with the proxy for you to use.
+
+---
+
 ### Thank You ❤️
 - [ScramJet](https://github.com/MercuryWorkshop/ScramJet) ~ Base proxy server and original inspiration for Revision
 

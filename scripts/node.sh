@@ -6,20 +6,32 @@
 # Requirements:
 # ~ NVM (Node Version Manager, installed with Node.js)
 
-set -e
+set -euo pipefail
+
 if [ ! -d "$HOME/.nvm" ] && [ ! -d "/usr/local/share/nvm" ]; then
   echo "NVM not found. Installing..."
   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 fi
+
 if [ -d "$HOME/.nvm" ]; then
   export NVM_DIR="$HOME/.nvm"
 elif [ -d "/usr/local/share/nvm" ]; then
   export NVM_DIR="/usr/local/share/nvm"
 fi
+
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
-nvm install node
-nvm use node
-echo "Installed the latest version of Node.js (Non-LTS)"
-npm install -g pnpm
-echo "Installed PNPM globally"
+
+if ! command -v node >/dev/null 2>&1; then
+  nvm install node
+else
+  nvm use node >/dev/null || nvm install node
+fi
+
+echo "Node.js ready: $(node -v)"
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  npm install -g pnpm
+fi
+
+echo "PNPM ready: $(pnpm --version)"

@@ -1,0 +1,17 @@
+{
+  "name": "Revision",
+  "forwardPorts": [],
+  "portsAttributes": {
+    "3000-3999": {
+      "label": "ScramJet Proxy",
+      "onAutoForward": "openBrowser",
+      "visibility": "public",
+      "protocol": "http"
+    }
+  },
+  "customizations": {
+    "codespaces": {
+      "openCopyUrl": true
+    }
+  }
+}

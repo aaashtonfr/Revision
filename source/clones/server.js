@@ -1,16 +1,6 @@
-/**
- * 
- *  Modified version of ScramJet's original server.
- * 
- *  Designed to be supported with PORT generation, all unused content
- *   has been removed from the file as well.
- * 
- *  Designed for ScramJet version 1.0.2-dev
- * 
- */
-
 import { createBareServer } from "@nebula-services/bare-server-node";
 import { createServer } from "http";
+import { createServer as createNetServer } from "net";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { join } from "node:path";
@@ -97,20 +87,100 @@ fastify.register(fastifyStatic, {
     decorateReply: false,
 });
 
+const isCodespaces = process.env.CODESPACES === "true";
 const manager = new PORTManager();
-const PORT = manager.pickPORT();
+let rawPort = manager.pickPORT();
+let PORT = rawPort && rawPort !== -1 ? Number(rawPort) : 8080;
 
-fastify.listen({
-    port: PORT,
-    host: "0.0.0.0",
-});
+function mapCodespacesPort(port) {
+    if (!isCodespaces) {
+        return port;
+    }
+
+    const candidate = Number(port);
+    return Number.isInteger(candidate) && candidate > 0
+        ? 3000 + (candidate % 1000)
+        : 3000;
+}
+
+function isPortAvailable(port, host = "0.0.0.0") {
+    return new Promise((resolve) => {
+        const probe = createNetServer();
+
+        probe.once("error", (error) => {
+            if (error?.code === "EADDRINUSE") {
+                resolve(false);
+                return;
+            }
+            resolve(false);
+        });
+
+        probe.once("listening", () => {
+            probe.close(() => resolve(true));
+        });
+
+        probe.listen(port, host);
+    });
+}
+
+async function selectAvailablePort(initialPort, initialRawPort) {
+    const MAX_ATTEMPTS = 25;
+    const tried = new Set();
+    let selectedPort = initialPort;
+    let selectedRawPort = initialRawPort;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+        if (!tried.has(selectedPort) && await isPortAvailable(selectedPort)) {
+            return { port: selectedPort, rawPort: selectedRawPort };
+        }
+
+        const busyPort = selectedPort;
+        tried.add(selectedPort);
+        const nextRawPort = manager.newPORT();
+        selectedRawPort = nextRawPort;
+        selectedPort = mapCodespacesPort(nextRawPort);
+        console.log(`[PORT] ${busyPort} is busy, retrying with ${selectedPort} (attempt ${attempt}/${MAX_ATTEMPTS})`);
+    }
+
+    throw new Error(`Failed to find an available port after ${MAX_ATTEMPTS} attempts.`);
+}
+
+if (isCodespaces) {
+    const envPort = Number(process.env.PORT);
+    if (Number.isInteger(envPort) && envPort > 0) {
+        PORT = envPort;
+    } else {
+        PORT = mapCodespacesPort(rawPort);
+    }
+}
+
+(async () => {
+    try {
+        const selected = await selectAvailablePort(PORT, rawPort);
+        PORT = selected.port;
+        rawPort = selected.rawPort;
+
+        await fastify.listen({
+            port: PORT,
+            host: "0.0.0.0",
+        });
+
+        console.log(`\n[SUCCESS] Server listening on 0.0.0.0:${PORT}`);
+
+        if (isCodespaces && process.env.CODESPACE_NAME) {
+            console.log(`[CODESPACES] Auto-forward expected on port ${PORT}`);
+            console.log(`[LINK] https://${process.env.CODESPACE_NAME}-${PORT}.app.github.dev`);
+        }
+    } catch (err) {
+        console.error(err);
+        process.exit(1);
+    }
+})();
 
 fastify.setNotFoundHandler((request, reply) => {
     console.error("PAGE PUNCHED THROUGH SW - " + request.url);
     reply.code(593).statusMessage("INVALID").send("punch through");
 });
-
-console.log(`Listening on http://localhost:${PORT}/`);
 
 if (!process.env.CI) {
     try {
@@ -122,6 +192,10 @@ if (!process.env.CI) {
     } catch {}
     const compiler = rspack(rspackConfig);
     compiler.watch({}, (err, stats) => {
+        if (err) {
+            console.error(err);
+            return;
+        }
         console.log(
             stats.toString({
                 preset: "minimal",

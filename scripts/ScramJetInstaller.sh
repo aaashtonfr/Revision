@@ -1,40 +1,64 @@
 #!/bin/bash
 set -euo pipefail
+
 cd ScramJet/rewriter/wasm
+
 if ! command -v rustc &> /dev/null; then
     echo "Rust not installed. Installing Rust..."
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 fi
+
 source "$HOME/.cargo/env"
 export PATH="$HOME/.cargo/bin:$PATH"
-rustup install nightly
-rustup update nightly
+
+if ! rustup toolchain list | grep -q '^nightly'; then
+    rustup install nightly
+fi
+
 rustup default nightly
 rustup override set nightly
-rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
+
+if ! rustup component list --toolchain nightly-x86_64-unknown-linux-gnu --installed | grep -q '^rust-src'; then
+    rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
+fi
+
 Panic="$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/panicking.rs"
 if [ -f "$Panic" ]; then
-    sed -i '/#\[cfg(feature = "panic_immediate_abort")\]/, /);/ s/^/\/\//' "$Panic"
-    echo "Patched $Panic"
+    if ! grep -q '^//\#\[cfg(feature = "panic_immediate_abort")\]' "$Panic"; then
+        sed -i '/#\[cfg(feature = "panic_immediate_abort")\]/, /);/ s/^/\/\//' "$Panic"
+        echo "Patched $Panic"
+    fi
 fi
-cargo install wasm-bindgen-cli --version 0.2.100 --force
-cargo install --git https://github.com/r58playz/wasm-snip --force
-Version=$(curl -sI https://github.com/WebAssembly/binaryen/releases/latest \
-    | awk -F '/' 'tolower($1) ~ /^location/ {print substr($NF, 1, length($NF)-1)}')
-curl -LO "https://github.com/WebAssembly/binaryen/releases/download/$Version/binaryen-${Version}-x86_64-linux.tar.gz"
-tar xvf "binaryen-${Version}-x86_64-linux.tar.gz"
-rm -f "binaryen-${Version}-x86_64-linux.tar.gz"
-mkdir -p ~/.local/bin ~/.local/lib
-mv "binaryen-${Version}/bin/"* ~/.local/bin/
-mv "binaryen-${Version}/lib/"* ~/.local/lib/
-rm -rf "binaryen-${Version}"
+
+if ! command -v wasm-bindgen >/dev/null 2>&1 || ! wasm-bindgen --version | grep -q '0.2.100'; then
+    cargo install wasm-bindgen-cli --version 0.2.100
+fi
+
+if ! command -v wasm-snip >/dev/null 2>&1; then
+    cargo install --git https://github.com/r58playz/wasm-snip
+fi
+
+if ! command -v wasm-opt >/dev/null 2>&1; then
+    Version=$(curl -sI https://github.com/WebAssembly/binaryen/releases/latest \
+        | awk -F '/' 'tolower($1) ~ /^location/ {print substr($NF, 1, length($NF)-1)}')
+    curl -LO "https://github.com/WebAssembly/binaryen/releases/download/$Version/binaryen-${Version}-x86_64-linux.tar.gz"
+    tar xf "binaryen-${Version}-x86_64-linux.tar.gz"
+    rm -f "binaryen-${Version}-x86_64-linux.tar.gz"
+    mkdir -p ~/.local/bin ~/.local/lib
+    mv "binaryen-${Version}/bin/"* ~/.local/bin/
+    mv "binaryen-${Version}/lib/"* ~/.local/lib/
+    rm -rf "binaryen-${Version}"
+fi
+
 export PATH="$HOME/.local/bin:$PATH"
 pnpm install
 export RUSTFLAGS='-Zlocation-detail=none -Zfmt-debug=none'
 STD_FEATURES="panic_immediate_abort"
+
 cargo build --release --target wasm32-unknown-unknown \
   -Z build-std=panic_abort,std -Z build-std-features=${STD_FEATURES} \
   --no-default-features --features "debug"
+
 bash build.sh
 cd ../../
 pnpm run build:all
