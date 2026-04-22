@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Docs</title>
+    <link rel="icon" type="image/x-icon" href="https://ssl.gstatic.com/docs/documents/images/kix-favicon7.ico">
+    
+    <script src="/uv/uv.bundle.js"></script>
+    <script src="/uv/uv.config.js"></script>
+
+    <style>
+        :root {
+            --bg-gradient: radial-gradient(circle at center, #111 0%, #050505 100%);
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.1);
+            --accent: #ffffff;
+            --glow: rgba(255, 255, 255, 0.4);
+        }
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg-gradient); color: white; display: flex; flex-direction: column; align-items: center; height: 100vh; overflow: hidden; }
+        .top-nav { position: absolute; top: 0; left: 0; width: 100%; height: 80px; display: flex; justify-content: center; align-items: center; z-index: 10; }
+        .top-search-bar { width: 350px; padding: 10px 20px; border-radius: 12px; border: 1px solid var(--border); background: var(--card-bg); backdrop-filter: blur(10px); color: white; outline: none; transition: 0.3s; }
+        .top-search-bar:focus { width: 400px; border-color: rgba(255,255,255,0.3); }
+        .brand { position: absolute; top: 25px; left: 30px; font-size: 22px; font-weight: 800; opacity: 0.9; z-index: 11; }
+        .settings-btn { position: absolute; top: 25px; right: 30px; font-size: 24px; cursor: pointer; z-index: 100; opacity: 0.6; }
+        .settings-panel { position: fixed; top: 70px; right: -310px; width: 250px; background: rgba(10,10,10,0.98); border: 1px solid var(--border); border-radius: 15px; padding: 20px; transition: 0.4s; z-index: 99; }
+        .settings-panel.open { right: 30px; }
+        .clock-container { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; margin-top: 40px; }
+        #clock { font-size: 110px; font-weight: 700; margin: 0; letter-spacing: -4px; background: linear-gradient(180deg, #fff 0%, #888 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .clock-line { width: 400px; height: 1.5px; background: linear-gradient(90deg, transparent, var(--accent), transparent); margin: 15px 0; box-shadow: 0 0 12px var(--glow); opacity: 0.8; }
+        .bottom-area { display: flex; flex-direction: column; align-items: center; gap: 25px; margin-bottom: 80px; }
+        .search-group { display: flex; background: var(--card-bg); border: 1px solid var(--border); border-radius: 15px; padding: 5px; backdrop-filter: blur(15px); }
+        .mid-search-bar { width: 350px; padding: 12px 15px; background: transparent; border: none; color: white; outline: none; }
+        .shortcuts { display: flex; gap: 15px; }
+        .shortcut-card { background: var(--card-bg); padding: 12px 24px; border-radius: 12px; text-decoration: none; color: rgba(255,255,255,0.8); border: 1px solid var(--border); font-size: 14px; font-weight: 500; transition: 0.3s; cursor: pointer; }
+        .shortcut-card:hover { transform: translateY(-3px); border-color: white; color: white; }
+    </style>
+</head>
+<body>
+    <div id="dashboard" style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center;">
+        <div class="brand">@aaashtonfr</div>
+        <div class="settings-btn" onclick="toggleSettings()">⚙️</div>
+        
+        <div class="settings-panel" id="settingsPanel">
+            <h3 style="margin:0 0 15px 0; font-size:16px;">Themes</h3>
+            <div style="display:flex; gap:10px;">
+                <div style="width:35px; height:35px; border-radius:5px; background:#050505; border:1px solid #333; cursor:pointer;" onclick="setTheme(0)"></div>
+                <div style="width:35px; height:35px; border-radius:5px; background:linear-gradient(#1e3c72, #2a5298); cursor:pointer;" onclick="setTheme(1)"></div>
+                <div style="width:35px; height:35px; border-radius:5px; background:linear-gradient(#ff4e50, #f9d423); cursor:pointer;" onclick="setTheme(2)"></div>
+            </div>
+        </div>
+
+        <div class="top-nav">
+            <input type="text" class="top-search-bar" placeholder="https://..." id="topSearch">
+        </div>
+
+        <div class="clock-container">
+            <h1 id="clock">00:00:00</h1>
+            <div class="clock-line"></div>
+        </div>
+
+        <div class="bottom-area">
+            <div class="search-group">
+                <input type="text" class="mid-search-bar" placeholder="Search the web..." id="midSearch">
+            </div>
+            <div class="shortcuts">
+                <div onclick="launch('https://soundcloud.com')" class="shortcut-card">Music</div>
+                <div onclick="launch('https://discord.com')" class="shortcut-card">Discord</div>
+                <div onclick="launch('https://github.com')" class="shortcut-card">GitHub</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Check if we are on a real server
+        const isLocal = window.location.protocol === 'file:';
+        
+        window.addEventListener("load", async () => {
+            if (isLocal) {
+                console.warn("NOTE: You are testing locally. Proxies only work when uploaded to Vercel/Render.");
+                return;
+            }
+
+            if ("serviceWorker" in navigator) {
+                try {
+                    await navigator.serviceWorker.register("/uv/sw.js", {
+                        scope: __uv$config.prefix,
+                    });
+                } catch (err) {
+                    console.error("Engine failed to start:", err);
+                }
+            }
+        });
+
+        function updateClock() { 
+            document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-GB'); 
+        }
+        setInterval(updateClock, 1000); 
+        updateClock();
+
+        function toggleSettings() { 
+            document.getElementById('settingsPanel').classList.toggle('open'); 
+        }
+
+        function setTheme(i) {
+            const themes = ["radial-gradient(#111, #050505)", "linear-gradient(135deg,#1e3c72,#2a5298)", "linear-gradient(135deg,#ff4e50,#f9d423)"];
+            document.body.style.background = themes[i];
+        }
+
+        function launch(val) {
+            if (isLocal) {
+                alert("This won't work on your computer. You MUST upload it to Vercel to test the proxy features.");
+                return;
+            }
+
+            let url = val.trim();
+            if (!url) return;
+            
+            if (!url.includes('.')) {
+                url = "https://www.google.com/search?q=" + encodeURIComponent(url);
+            } else if (!url.startsWith('http')) {
+                url = 'https://' + url;
+            }
+
+            // This only works when hosted on your Lucide server
+            const proxiedURL = __uv$config.prefix + __uv$config.encodeUrl(url);
+
+            const win = window.open('about:blank', '_blank');
+            if (win) {
+                win.document.title = "Google Docs";
+                const iframe = win.document.createElement('iframe');
+                iframe.style.cssText = "position:fixed; width:100vw; height:100vh; top:0; left:0; border:none; background:white;";
+                iframe.src = proxiedURL; 
+                win.document.body.style.margin = "0";
+                win.document.body.appendChild(iframe);
+            }
+        }
+
+        document.getElementById('midSearch').addEventListener('keypress', (e) => { 
+            if (e.key === 'Enter') launch(e.target.value); 
+        });
+        document.getElementById('topSearch').addEventListener('keypress', (e) => { 
+            if (e.key === 'Enter') launch(e.target.value); 
+        });
+    </script>
+</body>
+</html>
